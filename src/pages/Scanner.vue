@@ -8,20 +8,7 @@
       </router-link>
     </div>
 
-    <div v-if="!isConfigured" class="content">
-      <div class="error-section">
-        <AlertCircle :size="48" />
-        <h2 style="margin: 16px 0; font-size: 24px;">Configuration Required</h2>
-        <p style="max-width: 500px; text-align: center; line-height: 1.6; margin-bottom: 16px;">
-          Please create a <code style="background: rgba(0,0,0,0.2); padding: 2px 8px; border-radius: 4px;">.env</code> file with your Supabase credentials to use this app.
-        </p>
-        <p style="max-width: 500px; text-align: center; line-height: 1.6;">
-          See <code style="background: rgba(0,0,0,0.2); padding: 2px 8px; border-radius: 4px;">README.md</code> for setup instructions.
-        </p>
-      </div>
-    </div>
-
-    <div v-else class="content">
+    <div class="content">
       <div v-if="!imageSelected" class="upload-section">
         <div class="upload-area" @click="triggerFileInput">
           <Camera :size="48" />
@@ -56,40 +43,6 @@
               placeholder="Edit address if needed..."
               class="address-input"
             ></textarea>
-          </div>
-
-          <div v-if="parsedFields" class="parsed-fields-card">
-            <p class="label">Parsed Information:</p>
-            <div class="fields-grid">
-              <div class="field-item" v-if="parsedFields.salutation">
-                <span class="field-label">Salutation:</span>
-                <span class="field-value">{{ parsedFields.salutation }}</span>
-              </div>
-              <div class="field-item" v-if="parsedFields.first_name">
-                <span class="field-label">First Name:</span>
-                <span class="field-value">{{ parsedFields.first_name }}</span>
-              </div>
-              <div class="field-item" v-if="parsedFields.last_name">
-                <span class="field-label">Last Name:</span>
-                <span class="field-value">{{ parsedFields.last_name }}</span>
-              </div>
-              <div class="field-item" v-if="parsedFields.street_name">
-                <span class="field-label">Street Name:</span>
-                <span class="field-value">{{ parsedFields.street_name }}</span>
-              </div>
-              <div class="field-item" v-if="parsedFields.street_number">
-                <span class="field-label">Street Number:</span>
-                <span class="field-value">{{ parsedFields.street_number }}</span>
-              </div>
-              <div class="field-item" v-if="parsedFields.postal_code">
-                <span class="field-label">Postal Code:</span>
-                <span class="field-value">{{ parsedFields.postal_code }}</span>
-              </div>
-              <div class="field-item" v-if="parsedFields.place">
-                <span class="field-label">Place:</span>
-                <span class="field-value">{{ parsedFields.place }}</span>
-              </div>
-            </div>
           </div>
 
           <div v-if="saveSuccess" class="success-message">
@@ -128,9 +81,7 @@
 import { ref } from 'vue'
 import { Camera, Clock, CheckCircle, AlertCircle } from 'lucide-vue-next'
 import { recognizeAddress } from '@/lib/ocr'
-import { supabase, supabaseConfigured, type ParsedAddressFields } from '@/lib/supabase'
-
-const isConfigured = supabaseConfigured
+import { storage } from '@/lib/storage'
 
 const fileInput = ref<HTMLInputElement>()
 const imageSelected = ref(false)
@@ -140,7 +91,6 @@ const addressInput = ref('')
 const loading = ref(false)
 const error = ref('')
 const saveSuccess = ref(false)
-const parsedFields = ref<ParsedAddressFields | null>(null)
 let currentFile: File | null = null
 
 const triggerFileInput = () => {
@@ -168,34 +118,6 @@ const handleImageUpload = async (event: Event) => {
   reader.readAsDataURL(file)
 }
 
-const parseAddressWithChatGPT = async (address: string): Promise<ParsedAddressFields | null> => {
-  try {
-    const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse-address`
-
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ address }),
-    })
-
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error('Parse API error:', response.status, errorText)
-      throw new Error(`Failed to parse address: ${response.status}`)
-    }
-
-    const data = await response.json()
-    console.log('Parsed address data:', data)
-    return data
-  } catch (err) {
-    console.error('Error parsing address:', err)
-    return null
-  }
-}
-
 const extractAddress = async () => {
   if (!currentFile) return
 
@@ -206,11 +128,6 @@ const extractAddress = async () => {
     const address = await recognizeAddress(currentFile)
     recognizedAddress.value = address
     addressInput.value = address
-
-    const parsed = await parseAddressWithChatGPT(address)
-    if (parsed) {
-      parsedFields.value = parsed
-    }
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to recognize address'
   } finally {
@@ -218,35 +135,17 @@ const extractAddress = async () => {
   }
 }
 
-const saveAddress = async () => {
+const saveAddress = () => {
   if (!addressInput.value.trim()) {
     error.value = 'Please enter an address'
     return
   }
 
-  loading.value = true
-  error.value = ''
-
   try {
-    const { data: { session } } = await supabase.auth.getSession()
-    const userId = session?.user?.id || null
-
-    const { error: insertError } = await supabase
-      .from('addresses')
-      .insert({
-        address: addressInput.value,
-        user_id: userId,
-        image_data: previewUrl.value,
-        salutation: parsedFields.value?.salutation || null,
-        first_name: parsedFields.value?.first_name || null,
-        last_name: parsedFields.value?.last_name || null,
-        street_name: parsedFields.value?.street_name || null,
-        street_number: parsedFields.value?.street_number || null,
-        postal_code: parsedFields.value?.postal_code || null,
-        place: parsedFields.value?.place || null
-      })
-
-    if (insertError) throw insertError
+    storage.saveAddress({
+      address: addressInput.value,
+      image_data: previewUrl.value
+    })
 
     saveSuccess.value = true
     setTimeout(() => {
@@ -254,8 +153,6 @@ const saveAddress = async () => {
     }, 2000)
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to save address'
-  } finally {
-    loading.value = false
   }
 }
 
@@ -266,7 +163,6 @@ const resetScanner = () => {
   addressInput.value = ''
   error.value = ''
   saveSuccess.value = false
-  parsedFields.value = null
   currentFile = null
   if (fileInput.value) {
     fileInput.value.value = ''

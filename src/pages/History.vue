@@ -9,18 +9,7 @@
     </div>
 
     <div class="content">
-      <div v-if="!isConfigured" class="error-state">
-        <AlertCircle :size="48" />
-        <h2 style="margin: 16px 0; font-size: 24px;">Configuration Required</h2>
-        <p style="max-width: 500px; text-align: center; line-height: 1.6; margin-bottom: 16px;">
-          Please create a <code style="background: rgba(0,0,0,0.2); padding: 2px 8px; border-radius: 4px;">.env</code> file with your Supabase credentials to use this app.
-        </p>
-        <p style="max-width: 500px; text-align: center; line-height: 1.6;">
-          See <code style="background: rgba(0,0,0,0.2); padding: 2px 8px; border-radius: 4px;">README.md</code> for setup instructions.
-        </p>
-      </div>
-
-      <div v-else-if="loading" class="loading-state">
+      <div v-if="loading" class="loading-state">
         <div class="spinner"></div>
         <p>Loading addresses...</p>
       </div>
@@ -69,26 +58,18 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ArrowLeft, AlertCircle, Inbox, Camera, Trash2 } from 'lucide-vue-next'
-import { supabase, supabaseConfigured, type Address } from '@/lib/supabase'
+import { storage, type Address } from '@/lib/storage'
 
-const isConfigured = supabaseConfigured
 const addresses = ref<Address[]>([])
 const loading = ref(true)
 const error = ref('')
 
-const loadAddresses = async () => {
+const loadAddresses = () => {
   loading.value = true
   error.value = ''
 
   try {
-    const { data, error: fetchError } = await supabase
-      .from('addresses')
-      .select('*')
-      .order('created_at', { ascending: false })
-
-    if (fetchError) throw fetchError
-
-    addresses.value = data || []
+    addresses.value = storage.getAddresses()
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to load addresses'
   } finally {
@@ -96,18 +77,16 @@ const loadAddresses = async () => {
   }
 }
 
-const deleteAddress = async (id: string) => {
+const deleteAddress = (id: string) => {
   if (!confirm('Are you sure you want to delete this address?')) return
 
   try {
-    const { error: deleteError } = await supabase
-      .from('addresses')
-      .delete()
-      .eq('id', id)
-
-    if (deleteError) throw deleteError
-
-    addresses.value = addresses.value.filter((addr: Address) => addr.id !== id)
+    const success = storage.deleteAddress(id)
+    if (success) {
+      addresses.value = addresses.value.filter((addr: Address) => addr.id !== id)
+    } else {
+      throw new Error('Failed to delete address')
+    }
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to delete address'
   }
@@ -143,11 +122,7 @@ const formatDate = (dateString: string): string => {
 }
 
 onMounted(() => {
-  if (isConfigured) {
-    loadAddresses()
-  } else {
-    loading.value = false
-  }
+  loadAddresses()
 })
 </script>
 
