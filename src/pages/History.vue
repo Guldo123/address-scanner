@@ -120,7 +120,7 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #5BB4E8 0%, #3E9BD5 100%);
   color: white;
 }
 
