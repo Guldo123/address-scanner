@@ -167,10 +167,13 @@ const parseAddressWithChatGPT = async (address: string): Promise<ParsedAddressFi
     })
 
     if (!response.ok) {
-      throw new Error('Failed to parse address')
+      const errorText = await response.text()
+      console.error('Parse API error:', response.status, errorText)
+      throw new Error(`Failed to parse address: ${response.status}`)
     }
 
     const data = await response.json()
+    console.log('Parsed address data:', data)
     return data
   } catch (err) {
     console.error('Error parsing address:', err)
