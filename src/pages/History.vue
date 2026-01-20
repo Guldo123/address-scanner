@@ -4,7 +4,7 @@
       <router-link to="/" class="back-btn">
         <ArrowLeft :size="24" />
       </router-link>
-      <h1>Address History</h1>
+      <h1>Borm Live History</h1>
       <div style="width: 40px;"></div>
     </div>
 

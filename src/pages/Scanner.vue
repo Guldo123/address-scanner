@@ -1,7 +1,7 @@
 <template>
   <div class="scanner-container">
     <div class="header">
-      <h1>Address Scanner</h1>
+      <h1>Borm Live address scanner</h1>
       <router-link to="/history" class="history-btn">
         <Clock :size="24" />
         <span>History</span>
