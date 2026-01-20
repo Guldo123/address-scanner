@@ -5,9 +5,26 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
+export interface ParsedAddressFields {
+  salutation: string | null
+  first_name: string | null
+  last_name: string | null
+  street_name: string | null
+  street_number: string | null
+  postal_code: string | null
+  place: string | null
+}
+
 export interface Address {
   id: string
   address: string
   created_at: string
   image_data?: string
+  salutation?: string | null
+  first_name?: string | null
+  last_name?: string | null
+  street_name?: string | null
+  street_number?: string | null
+  postal_code?: string | null
+  place?: string | null
 }

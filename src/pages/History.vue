@@ -36,6 +36,14 @@
           </div>
           <div class="address-info">
             <p class="address-text">{{ address.address }}</p>
+            <div v-if="hasStructuredData(address)" class="structured-data">
+              <span v-if="address.salutation" class="data-pill">{{ address.salutation }}</span>
+              <span v-if="address.first_name" class="data-pill">{{ address.first_name }}</span>
+              <span v-if="address.last_name" class="data-pill">{{ address.last_name }}</span>
+              <span v-if="address.street_name" class="data-pill">{{ address.street_name }} {{ address.street_number }}</span>
+              <span v-if="address.postal_code" class="data-pill">{{ address.postal_code }}</span>
+              <span v-if="address.place" class="data-pill">{{ address.place }}</span>
+            </div>
             <span class="address-date">{{ formatDate(address.created_at) }}</span>
           </div>
           <button @click="deleteAddress(address.id)" class="delete-btn">
@@ -91,6 +99,18 @@ const deleteAddress = async (id: string) => {
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to delete address'
   }
+}
+
+const hasStructuredData = (address: Address): boolean => {
+  return !!(
+    address.salutation ||
+    address.first_name ||
+    address.last_name ||
+    address.street_name ||
+    address.street_number ||
+    address.postal_code ||
+    address.place
+  )
 }
 
 const formatDate = (dateString: string): string => {
@@ -292,6 +312,24 @@ onMounted(() => {
   margin: 0 0 4px 0;
   line-height: 1.4;
   word-wrap: break-word;
+}
+
+.structured-data {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0;
+}
+
+.data-pill {
+  display: inline-block;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
 }
 
 .address-date {

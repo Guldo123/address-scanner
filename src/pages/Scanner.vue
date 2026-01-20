@@ -45,6 +45,40 @@
             ></textarea>
           </div>
 
+          <div v-if="parsedFields" class="parsed-fields-card">
+            <p class="label">Parsed Information:</p>
+            <div class="fields-grid">
+              <div class="field-item" v-if="parsedFields.salutation">
+                <span class="field-label">Salutation:</span>
+                <span class="field-value">{{ parsedFields.salutation }}</span>
+              </div>
+              <div class="field-item" v-if="parsedFields.first_name">
+                <span class="field-label">First Name:</span>
+                <span class="field-value">{{ parsedFields.first_name }}</span>
+              </div>
+              <div class="field-item" v-if="parsedFields.last_name">
+                <span class="field-label">Last Name:</span>
+                <span class="field-value">{{ parsedFields.last_name }}</span>
+              </div>
+              <div class="field-item" v-if="parsedFields.street_name">
+                <span class="field-label">Street Name:</span>
+                <span class="field-value">{{ parsedFields.street_name }}</span>
+              </div>
+              <div class="field-item" v-if="parsedFields.street_number">
+                <span class="field-label">Street Number:</span>
+                <span class="field-value">{{ parsedFields.street_number }}</span>
+              </div>
+              <div class="field-item" v-if="parsedFields.postal_code">
+                <span class="field-label">Postal Code:</span>
+                <span class="field-value">{{ parsedFields.postal_code }}</span>
+              </div>
+              <div class="field-item" v-if="parsedFields.place">
+                <span class="field-label">Place:</span>
+                <span class="field-value">{{ parsedFields.place }}</span>
+              </div>
+            </div>
+          </div>
+
           <div v-if="saveSuccess" class="success-message">
             <CheckCircle :size="24" />
             <span>Address saved successfully!</span>
@@ -81,7 +115,7 @@
 import { ref } from 'vue'
 import { Camera, Clock, CheckCircle, AlertCircle } from 'lucide-vue-next'
 import { recognizeAddress } from '@/lib/ocr'
-import { supabase } from '@/lib/supabase'
+import { supabase, type ParsedAddressFields } from '@/lib/supabase'
 
 const fileInput = ref<HTMLInputElement>()
 const imageSelected = ref(false)
@@ -91,6 +125,7 @@ const addressInput = ref('')
 const loading = ref(false)
 const error = ref('')
 const saveSuccess = ref(false)
+const parsedFields = ref<ParsedAddressFields | null>(null)
 let currentFile: File | null = null
 
 const triggerFileInput = () => {
@@ -118,6 +153,31 @@ const handleImageUpload = async (event: Event) => {
   reader.readAsDataURL(file)
 }
 
+const parseAddressWithChatGPT = async (address: string): Promise<ParsedAddressFields | null> => {
+  try {
+    const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse-address`
+
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ address }),
+    })
+
+    if (!response.ok) {
+      throw new Error('Failed to parse address')
+    }
+
+    const data = await response.json()
+    return data
+  } catch (err) {
+    console.error('Error parsing address:', err)
+    return null
+  }
+}
+
 const extractAddress = async () => {
   if (!currentFile) return
 
@@ -128,6 +188,11 @@ const extractAddress = async () => {
     const address = await recognizeAddress(currentFile)
     recognizedAddress.value = address
     addressInput.value = address
+
+    const parsed = await parseAddressWithChatGPT(address)
+    if (parsed) {
+      parsedFields.value = parsed
+    }
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to recognize address'
   } finally {
@@ -153,7 +218,14 @@ const saveAddress = async () => {
       .insert({
         address: addressInput.value,
         user_id: userId,
-        image_data: previewUrl.value
+        image_data: previewUrl.value,
+        salutation: parsedFields.value?.salutation || null,
+        first_name: parsedFields.value?.first_name || null,
+        last_name: parsedFields.value?.last_name || null,
+        street_name: parsedFields.value?.street_name || null,
+        street_number: parsedFields.value?.street_number || null,
+        postal_code: parsedFields.value?.postal_code || null,
+        place: parsedFields.value?.place || null
       })
 
     if (insertError) throw insertError
@@ -176,6 +248,7 @@ const resetScanner = () => {
   addressInput.value = ''
   error.value = ''
   saveSuccess.value = false
+  parsedFields.value = null
   currentFile = null
   if (fileInput.value) {
     fileInput.value.value = ''
@@ -465,6 +538,46 @@ const resetScanner = () => {
   border-color: rgba(255, 255, 255, 0.5);
 }
 
+.parsed-fields-card {
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  border-radius: 12px;
+  padding: 20px;
+  margin-top: 16px;
+}
+
+.fields-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.field-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.field-label {
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.8;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.field-value {
+  font-size: 16px;
+  font-weight: 500;
+  color: white;
+}
+
 @media (max-width: 640px) {
   .header {
     padding: 16px;
@@ -480,6 +593,10 @@ const resetScanner = () => {
 
   .content {
     padding: 16px;
+  }
+
+  .fields-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>
