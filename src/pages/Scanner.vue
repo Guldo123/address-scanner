@@ -8,7 +8,20 @@
       </router-link>
     </div>
 
-    <div class="content">
+    <div v-if="!isConfigured" class="content">
+      <div class="error-section">
+        <AlertCircle :size="48" />
+        <h2 style="margin: 16px 0; font-size: 24px;">Configuration Required</h2>
+        <p style="max-width: 500px; text-align: center; line-height: 1.6; margin-bottom: 16px;">
+          Please create a <code style="background: rgba(0,0,0,0.2); padding: 2px 8px; border-radius: 4px;">.env</code> file with your Supabase credentials to use this app.
+        </p>
+        <p style="max-width: 500px; text-align: center; line-height: 1.6;">
+          See <code style="background: rgba(0,0,0,0.2); padding: 2px 8px; border-radius: 4px;">README.md</code> for setup instructions.
+        </p>
+      </div>
+    </div>
+
+    <div v-else class="content">
       <div v-if="!imageSelected" class="upload-section">
         <div class="upload-area" @click="triggerFileInput">
           <Camera :size="48" />
@@ -115,7 +128,9 @@
 import { ref } from 'vue'
 import { Camera, Clock, CheckCircle, AlertCircle } from 'lucide-vue-next'
 import { recognizeAddress } from '@/lib/ocr'
-import { supabase, type ParsedAddressFields } from '@/lib/supabase'
+import { supabase, supabaseConfigured, type ParsedAddressFields } from '@/lib/supabase'
+
+const isConfigured = supabaseConfigured
 
 const fileInput = ref<HTMLInputElement>()
 const imageSelected = ref(false)
