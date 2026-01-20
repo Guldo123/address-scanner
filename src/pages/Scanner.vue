@@ -34,10 +34,41 @@
           <p>Recognizing address...</p>
         </div>
 
-        <div v-else-if="recognizedAddress" class="result-section">
+        <div v-else-if="parsedAddress" class="result-section">
           <div class="address-card">
             <p class="label">Recognized Address:</p>
-            <p class="address-text">{{ recognizedAddress }}</p>
+            <p class="address-text">{{ parsedAddress.fullText }}</p>
+
+            <div v-if="hasStructuredData" class="parsed-fields-card">
+              <p class="label">Parsed Fields:</p>
+              <div class="fields-grid">
+                <div v-if="parsedAddress.salutation" class="field-item">
+                  <span class="field-label">Salutation</span>
+                  <span class="field-value">{{ parsedAddress.salutation }}</span>
+                </div>
+                <div v-if="parsedAddress.first_name" class="field-item">
+                  <span class="field-label">First Name</span>
+                  <span class="field-value">{{ parsedAddress.first_name }}</span>
+                </div>
+                <div v-if="parsedAddress.last_name" class="field-item">
+                  <span class="field-label">Last Name</span>
+                  <span class="field-value">{{ parsedAddress.last_name }}</span>
+                </div>
+                <div v-if="parsedAddress.street_name" class="field-item">
+                  <span class="field-label">Street</span>
+                  <span class="field-value">{{ parsedAddress.street_name }} {{ parsedAddress.street_number }}</span>
+                </div>
+                <div v-if="parsedAddress.postal_code" class="field-item">
+                  <span class="field-label">Postal Code</span>
+                  <span class="field-value">{{ parsedAddress.postal_code }}</span>
+                </div>
+                <div v-if="parsedAddress.place" class="field-item">
+                  <span class="field-label">City</span>
+                  <span class="field-value">{{ parsedAddress.place }}</span>
+                </div>
+              </div>
+            </div>
+
             <textarea
               v-model="addressInput"
               placeholder="Edit address if needed..."
@@ -78,20 +109,32 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { Camera, Clock, CheckCircle, AlertCircle } from 'lucide-vue-next'
-import { recognizeAddress } from '@/lib/ocr'
+import { recognizeAddress, type ParsedAddress } from '@/lib/ocr'
 import { storage } from '@/lib/storage'
 
 const fileInput = ref<HTMLInputElement>()
 const imageSelected = ref(false)
 const previewUrl = ref('')
-const recognizedAddress = ref('')
+const parsedAddress = ref<ParsedAddress | null>(null)
 const addressInput = ref('')
 const loading = ref(false)
 const error = ref('')
 const saveSuccess = ref(false)
 let currentFile: File | null = null
+
+const hasStructuredData = computed(() => {
+  return !!(
+    parsedAddress.value?.salutation ||
+    parsedAddress.value?.first_name ||
+    parsedAddress.value?.last_name ||
+    parsedAddress.value?.street_name ||
+    parsedAddress.value?.street_number ||
+    parsedAddress.value?.postal_code ||
+    parsedAddress.value?.place
+  )
+})
 
 const triggerFileInput = () => {
   fileInput.value?.click()
@@ -106,7 +149,7 @@ const handleImageUpload = async (event: Event) => {
   currentFile = file
   imageSelected.value = true
   error.value = ''
-  recognizedAddress.value = ''
+  parsedAddress.value = null
   addressInput.value = ''
   saveSuccess.value = false
 
@@ -125,9 +168,9 @@ const extractAddress = async () => {
   error.value = ''
 
   try {
-    const address = await recognizeAddress(currentFile)
-    recognizedAddress.value = address
-    addressInput.value = address
+    const result = await recognizeAddress(currentFile)
+    parsedAddress.value = result
+    addressInput.value = result.fullText
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to recognize address'
   } finally {
@@ -144,7 +187,14 @@ const saveAddress = () => {
   try {
     storage.saveAddress({
       address: addressInput.value,
-      image_data: previewUrl.value
+      image_data: previewUrl.value,
+      salutation: parsedAddress.value?.salutation,
+      first_name: parsedAddress.value?.first_name,
+      last_name: parsedAddress.value?.last_name,
+      street_name: parsedAddress.value?.street_name,
+      street_number: parsedAddress.value?.street_number,
+      postal_code: parsedAddress.value?.postal_code,
+      place: parsedAddress.value?.place
     })
 
     saveSuccess.value = true
@@ -159,7 +209,7 @@ const saveAddress = () => {
 const resetScanner = () => {
   imageSelected.value = false
   previewUrl.value = ''
-  recognizedAddress.value = ''
+  parsedAddress.value = null
   addressInput.value = ''
   error.value = ''
   saveSuccess.value = false
