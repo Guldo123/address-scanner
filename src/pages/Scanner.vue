@@ -3,7 +3,7 @@
     <div class="header">
       <h1>Borm Live address scanner</h1>
       <router-link to="/history" class="history-btn">
-        <Clock :size="24" />
+        <Clock :size="20" />
         <span>History</span>
       </router-link>
     </div>
@@ -264,43 +264,66 @@ const resetScanner = () => {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background: linear-gradient(135deg, #5BB4E8 0%, #3E9BD5 100%);
+  background:
+    linear-gradient(135deg, rgba(91, 180, 232, 0.85) 0%, rgba(62, 155, 213, 0.9) 100%),
+    url('https://images.pexels.com/photos/3184418/pexels-photo-3184418.jpeg?auto=compress&cs=tinysrgb&w=1920') center/cover no-repeat;
   color: white;
+  position: relative;
+}
+
+.scanner-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.1);
+  pointer-events: none;
 }
 
 .header {
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
   align-items: center;
-  padding: 20px;
-  background: rgba(0, 0, 0, 0.2);
-  backdrop-filter: blur(10px);
+  gap: 12px;
+  padding: 24px 20px;
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(15px);
+  position: relative;
+  z-index: 1;
 }
 
 .header h1 {
-  font-size: 24px;
-  font-weight: 600;
+  font-size: 28px;
+  font-weight: 700;
   margin: 0;
+  text-align: center;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 .history-btn {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: rgba(255, 255, 255, 0.2);
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-radius: 8px;
-  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.25);
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-radius: 10px;
+  padding: 10px 20px;
   text-decoration: none;
   color: white;
-  font-weight: 500;
+  font-weight: 600;
+  font-size: 14px;
   transition: all 0.3s ease;
   cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 .history-btn:hover {
-  background: rgba(255, 255, 255, 0.3);
-  border-color: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.35);
+  border-color: rgba(255, 255, 255, 0.6);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
 }
 
 .content {
@@ -311,6 +334,8 @@ const resetScanner = () => {
   align-items: center;
   padding: 20px;
   overflow-y: auto;
+  position: relative;
+  z-index: 1;
 }
 
 .upload-section {
@@ -583,11 +608,16 @@ const resetScanner = () => {
 
 @media (max-width: 640px) {
   .header {
-    padding: 16px;
+    padding: 20px 16px;
   }
 
   .header h1 {
-    font-size: 20px;
+    font-size: 22px;
+  }
+
+  .history-btn {
+    padding: 8px 16px;
+    font-size: 13px;
   }
 
   .upload-area {
