@@ -24,6 +24,10 @@ export interface Address {
 
 const STORAGE_KEY = 'address_scanner_history'
 
+function generateId(): string {
+  return `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+}
+
 export const storage = {
   getAddresses(): Address[] {
     try {
@@ -39,7 +43,7 @@ export const storage = {
     const addresses = this.getAddresses()
     const newAddress: Address = {
       ...address,
-      id: crypto.randomUUID(),
+      id: generateId(),
       created_at: new Date().toISOString()
     }
 
