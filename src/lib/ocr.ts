@@ -3,6 +3,7 @@ export interface ParsedAddress {
   salutation?: string
   first_name?: string
   last_name?: string
+  company?: string
   street_name?: string
   street_number?: string
   postal_code?: string
@@ -39,6 +40,7 @@ export async function recognizeAddress(imageFile: File | Blob): Promise<ParsedAd
   "salutation": "title like Herr, Frau, Mr, Mrs, Dr, etc. or null",
   "first_name": "first name or null",
   "last_name": "last name or null",
+  "company": "company name or null",
   "street_name": "street name without number or null",
   "street_number": "street number or null",
   "postal_code": "postal/zip code or null",

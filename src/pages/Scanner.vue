@@ -54,6 +54,10 @@
                   <span class="field-label">Last Name</span>
                   <span class="field-value">{{ parsedAddress.last_name }}</span>
                 </div>
+                <div v-if="parsedAddress.company" class="field-item">
+                  <span class="field-label">Company</span>
+                  <span class="field-value">{{ parsedAddress.company }}</span>
+                </div>
                 <div v-if="parsedAddress.street_name" class="field-item">
                   <span class="field-label">Street</span>
                   <span class="field-value">{{ parsedAddress.street_name }} {{ parsedAddress.street_number }}</span>
@@ -67,6 +71,35 @@
                   <span class="field-value">{{ parsedAddress.place }}</span>
                 </div>
               </div>
+            </div>
+
+            <div v-if="showDuplicates" class="duplicates-section">
+              <p class="label">Similar addresses found ({{ duplicates.length }}):</p>
+              <p class="info-text">Select an address to update it, or create a new one:</p>
+              <div class="duplicates-list">
+                <div
+                  v-for="duplicate in duplicates"
+                  :key="duplicate.id"
+                  class="duplicate-card"
+                  :class="{ selected: selectedDuplicate === duplicate.id }"
+                  @click="selectDuplicate(duplicate.id)"
+                >
+                  <div class="duplicate-content">
+                    <p class="duplicate-text">{{ duplicate.address || duplicate.full_text }}</p>
+                    <div v-if="duplicate.company || duplicate.last_name || duplicate.place" class="duplicate-details">
+                      <span v-if="duplicate.company">{{ duplicate.company }}</span>
+                      <span v-if="duplicate.last_name">{{ duplicate.last_name }}</span>
+                      <span v-if="duplicate.place">{{ duplicate.place }}</span>
+                    </div>
+                  </div>
+                  <div v-if="selectedDuplicate === duplicate.id" class="selected-indicator">
+                    <CheckCircle :size="20" />
+                  </div>
+                </div>
+              </div>
+              <button @click="createNew" class="create-new-btn">
+                Create New Address Instead
+              </button>
             </div>
 
             <textarea
@@ -87,8 +120,8 @@
           </div>
 
           <div class="button-group">
-            <button @click="saveAddress" class="save-btn">
-              Save Address
+            <button @click="saveAddress" class="save-btn" :disabled="loading">
+              {{ selectedDuplicate ? 'Update Address' : 'Save Address' }}
             </button>
             <button @click="resetScanner" class="cancel-btn">
               Scan Again
@@ -112,7 +145,7 @@
 import { ref, computed } from 'vue'
 import { Camera, Clock, CheckCircle, AlertCircle } from 'lucide-vue-next'
 import { recognizeAddress, type ParsedAddress } from '@/lib/ocr'
-import { storage } from '@/lib/storage'
+import { searchAddresses, addAddress, updateAddress, type Address } from '@/lib/api'
 
 const fileInput = ref<HTMLInputElement>()
 const imageSelected = ref(false)
@@ -120,8 +153,12 @@ const previewUrl = ref('')
 const parsedAddress = ref<ParsedAddress | null>(null)
 const addressInput = ref('')
 const loading = ref(false)
+const searching = ref(false)
 const error = ref('')
 const saveSuccess = ref(false)
+const duplicates = ref<Address[]>([])
+const selectedDuplicate = ref<string | null>(null)
+const showDuplicates = ref(false)
 let currentFile: File | null = null
 
 const hasStructuredData = computed(() => {
@@ -129,6 +166,7 @@ const hasStructuredData = computed(() => {
     parsedAddress.value?.salutation ||
     parsedAddress.value?.first_name ||
     parsedAddress.value?.last_name ||
+    parsedAddress.value?.company ||
     parsedAddress.value?.street_name ||
     parsedAddress.value?.street_number ||
     parsedAddress.value?.postal_code ||
@@ -171,6 +209,8 @@ const extractAddress = async () => {
     const result = await recognizeAddress(currentFile)
     parsedAddress.value = result
     addressInput.value = result.fullText
+
+    await checkDuplicates()
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to recognize address'
   } finally {
@@ -178,24 +218,62 @@ const extractAddress = async () => {
   }
 }
 
-const saveAddress = () => {
+const checkDuplicates = async () => {
+  if (!parsedAddress.value) return
+
+  searching.value = true
+  duplicates.value = []
+  selectedDuplicate.value = null
+  showDuplicates.value = false
+
+  try {
+    const searchParams = {
+      company: parsedAddress.value.company,
+      last_name: parsedAddress.value.last_name,
+      place: parsedAddress.value.place,
+    }
+
+    const results = await searchAddresses(searchParams)
+    duplicates.value = results
+
+    if (results.length > 0) {
+      showDuplicates.value = true
+    }
+  } catch (err) {
+    console.error('Error checking duplicates:', err)
+  } finally {
+    searching.value = false
+  }
+}
+
+const saveAddress = async () => {
   if (!addressInput.value.trim()) {
     error.value = 'Please enter an address'
     return
   }
 
+  loading.value = true
+  error.value = ''
+
   try {
-    storage.saveAddress({
-      address: addressInput.value,
-      image_data: previewUrl.value,
+    const addressData = {
+      full_text: addressInput.value,
       salutation: parsedAddress.value?.salutation,
       first_name: parsedAddress.value?.first_name,
       last_name: parsedAddress.value?.last_name,
+      company: parsedAddress.value?.company,
       street_name: parsedAddress.value?.street_name,
       street_number: parsedAddress.value?.street_number,
       postal_code: parsedAddress.value?.postal_code,
-      place: parsedAddress.value?.place
-    })
+      place: parsedAddress.value?.place,
+      image_data: previewUrl.value,
+    }
+
+    if (selectedDuplicate.value) {
+      await updateAddress(selectedDuplicate.value, addressData)
+    } else {
+      await addAddress(addressData)
+    }
 
     saveSuccess.value = true
     setTimeout(() => {
@@ -203,7 +281,18 @@ const saveAddress = () => {
     }, 2000)
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to save address'
+  } finally {
+    loading.value = false
   }
+}
+
+const selectDuplicate = (id: string) => {
+  selectedDuplicate.value = id
+}
+
+const createNew = () => {
+  selectedDuplicate.value = null
+  showDuplicates.value = false
 }
 
 const resetScanner = () => {
@@ -213,6 +302,10 @@ const resetScanner = () => {
   addressInput.value = ''
   error.value = ''
   saveSuccess.value = false
+  duplicates.value = []
+  selectedDuplicate.value = null
+  showDuplicates.value = false
+  searching.value = false
   currentFile = null
   if (fileInput.value) {
     fileInput.value.value = ''
@@ -504,10 +597,15 @@ const resetScanner = () => {
   transition: all 0.3s ease;
 }
 
-.save-btn:hover {
+.save-btn:hover:not(:disabled) {
   background: #059669;
   transform: translateY(-2px);
   box-shadow: 0 8px 16px rgba(16, 185, 129, 0.3);
+}
+
+.save-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .cancel-btn {
@@ -565,6 +663,100 @@ const resetScanner = () => {
   font-size: 16px;
   font-weight: 500;
   color: white;
+}
+
+.duplicates-section {
+  margin-top: 20px;
+  padding: 20px;
+  background: rgba(255, 193, 7, 0.15);
+  border: 2px solid rgba(255, 193, 7, 0.5);
+  border-radius: 12px;
+}
+
+.info-text {
+  font-size: 13px;
+  margin: 8px 0 16px 0;
+  opacity: 0.9;
+}
+
+.duplicates-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.duplicate-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.duplicate-card:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.4);
+  transform: translateX(4px);
+}
+
+.duplicate-card.selected {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: rgba(16, 185, 129, 0.6);
+}
+
+.duplicate-content {
+  flex: 1;
+}
+
+.duplicate-text {
+  font-size: 14px;
+  font-weight: 500;
+  margin: 0 0 8px 0;
+  line-height: 1.4;
+}
+
+.duplicate-details {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.duplicate-details span {
+  font-size: 12px;
+  padding: 4px 10px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.selected-indicator {
+  color: #86efac;
+  display: flex;
+  align-items: center;
+  margin-left: 12px;
+}
+
+.create-new-btn {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+  padding: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.create-new-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+  border-color: rgba(255, 255, 255, 0.5);
 }
 
 @media (max-width: 640px) {
