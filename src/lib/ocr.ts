@@ -72,7 +72,7 @@ Return ONLY the JSON object, no additional text or explanation.`
       throw new Error('No response from OpenAI API')
     }
 
-    const parsed = JSON.parse(content.trim()) as ParsedAddress
+    const parsed = extractJSON(content) as ParsedAddress
 
     if (!parsed.fullText) {
       return { fullText: 'No address found' }
@@ -85,6 +85,27 @@ Return ONLY the JSON object, no additional text or explanation.`
       throw error
     }
     throw new Error('Failed to recognize address from image')
+  }
+}
+
+function extractJSON(content: string): ParsedAddress {
+  let jsonText = content.trim()
+
+  const codeBlockMatch = jsonText.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/)
+  if (codeBlockMatch) {
+    jsonText = codeBlockMatch[1].trim()
+  }
+
+  const jsonMatch = jsonText.match(/\{[\s\S]*\}/)
+  if (jsonMatch) {
+    jsonText = jsonMatch[0]
+  }
+
+  try {
+    return JSON.parse(jsonText)
+  } catch (e) {
+    console.error('Failed to parse JSON:', jsonText)
+    throw new Error('Failed to parse address data from ChatGPT response')
   }
 }
 
