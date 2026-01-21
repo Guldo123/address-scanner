@@ -38,7 +38,7 @@ export interface AddressInput {
 }
 
 export async function searchAddresses(params: SearchParams): Promise<Address[]> {
-  const response = await fetch(`${SUPABASE_URL}/functions/v1/address-search`, {
+  const response = await fetch(`/app/py/bg_plugins/address_scanner/search`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -52,11 +52,11 @@ export async function searchAddresses(params: SearchParams): Promise<Address[]> 
   }
 
   const data = await response.json()
-  return data.addresses || []
+  return data || []
 }
 
 export async function addAddress(address: AddressInput): Promise<Address> {
-  const response = await fetch(`${SUPABASE_URL}/functions/v1/address-add`, {
+  const response = await fetch(`/app/py/bg_plugins/address_scanner`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -74,7 +74,7 @@ export async function addAddress(address: AddressInput): Promise<Address> {
 }
 
 export async function updateAddress(id: string, address: AddressInput): Promise<Address> {
-  const response = await fetch(`${SUPABASE_URL}/functions/v1/address-update/${id}`, {
+  const response = await fetch(`/app/py/bg_plugins/address_scanner/${id}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
