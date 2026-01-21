@@ -1,5 +1,3 @@
-import Tesseract from 'tesseract.js'
-
 export interface ParsedAddress {
   fullText: string
   salutation?: string
@@ -13,76 +11,91 @@ export interface ParsedAddress {
 
 export async function recognizeAddress(imageFile: File | Blob): Promise<ParsedAddress> {
   try {
-    const worker = await Tesseract.createWorker('eng')
+    const apiKey = import.meta.env.VITE_OPENAI_API_KEY
 
-    const result = await worker.recognize(imageFile)
-    const text = result.data.text
+    if (!apiKey || apiKey === 'your_openai_api_key_here') {
+      throw new Error('OpenAI API key not configured. Please add your API key to the .env file.')
+    }
 
-    await worker.terminate()
+    const base64Image = await convertToBase64(imageFile)
 
-    return parseAddress(text)
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: `Please extract the address information from this image and return it in the following JSON format:
+{
+  "fullText": "complete address as single line",
+  "salutation": "title like Herr, Frau, Mr, Mrs, Dr, etc. or null",
+  "first_name": "first name or null",
+  "last_name": "last name or null",
+  "street_name": "street name without number or null",
+  "street_number": "street number or null",
+  "postal_code": "postal/zip code or null",
+  "place": "city/place name or null"
+}
+
+Return ONLY the JSON object, no additional text or explanation.`
+              },
+              {
+                type: 'image_url',
+                image_url: {
+                  url: base64Image
+                }
+              }
+            ]
+          }
+        ],
+        max_tokens: 500
+      })
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      throw new Error(`OpenAI API error: ${response.status} ${response.statusText}${errorData.error?.message ? ' - ' + errorData.error.message : ''}`)
+    }
+
+    const data = await response.json()
+    const content = data.choices[0]?.message?.content
+
+    if (!content) {
+      throw new Error('No response from OpenAI API')
+    }
+
+    const parsed = JSON.parse(content.trim()) as ParsedAddress
+
+    if (!parsed.fullText) {
+      return { fullText: 'No address found' }
+    }
+
+    return parsed
   } catch (error) {
     console.error('OCR Error:', error)
+    if (error instanceof Error) {
+      throw error
+    }
     throw new Error('Failed to recognize address from image')
   }
 }
 
-function parseAddress(text: string): ParsedAddress {
-  const lines = text.split('\n').filter(line => line.trim().length > 0)
-
-  const parsed: ParsedAddress = {
-    fullText: lines.join(', ')
-  }
-
-  if (lines.length === 0) {
-    return { fullText: 'No address found' }
-  }
-
-  const salutations = ['Herr', 'Frau', 'Mr', 'Mrs', 'Ms', 'Dr']
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim()
-
-    if (!parsed.salutation && salutations.some(sal => line.includes(sal))) {
-      const salutation = salutations.find(sal => line.includes(sal))
-      parsed.salutation = salutation
-
-      const nameMatch = line.replace(salutation!, '').trim()
-      const nameParts = nameMatch.split(/\s+/)
-      if (nameParts.length >= 1) {
-        parsed.first_name = nameParts[0]
-        if (nameParts.length >= 2) {
-          parsed.last_name = nameParts.slice(1).join(' ')
-        }
-      }
-      continue
+async function convertToBase64(file: File | Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = reader.result as string
+      resolve(result)
     }
-
-    if (!parsed.first_name && !parsed.last_name && i === 0 && !line.match(/\d/)) {
-      const nameParts = line.split(/\s+/)
-      if (nameParts.length >= 1) {
-        parsed.first_name = nameParts[0]
-        if (nameParts.length >= 2) {
-          parsed.last_name = nameParts.slice(1).join(' ')
-        }
-      }
-      continue
-    }
-
-    const streetMatch = line.match(/^(.+?)\s+(\d+[a-zA-Z]?)$/)
-    if (streetMatch && !parsed.street_name) {
-      parsed.street_name = streetMatch[1].trim()
-      parsed.street_number = streetMatch[2].trim()
-      continue
-    }
-
-    const postalMatch = line.match(/^(\d{4,5})\s+(.+)$/)
-    if (postalMatch && !parsed.postal_code) {
-      parsed.postal_code = postalMatch[1]
-      parsed.place = postalMatch[2].trim()
-      continue
-    }
-  }
-
-  return parsed
+    reader.onerror = () => reject(new Error('Failed to read image file'))
+    reader.readAsDataURL(file)
+  })
 }
