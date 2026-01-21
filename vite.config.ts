@@ -3,6 +3,7 @@ import vue from '@vitejs/plugin-vue'
 import { fileURLToPath, URL } from 'node:url'
 
 export default defineConfig({
+  base: '/bg_plugins/address-scanner',
   plugins: [vue()],
   resolve: {
     alias: {
@@ -11,7 +12,7 @@ export default defineConfig({
   },
   server: {
     host: '0.0.0.0',
-    port: 5173,
+    port: 3006,
     headers: {
       'Access-Control-Allow-Origin': '*',
       'X-Frame-Options': 'ALLOWALL'
